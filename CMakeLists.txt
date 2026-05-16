@@ -26,8 +26,9 @@ endif()
 add_executable(main src/main.cpp)
 target_compile_features(main PRIVATE cxx_std_23)
 
-# Generate a number of simple translation units that include a heavy header
+# Generate worker translation units (or a single unity translation unit)
 option(NUM_WORKERS "Number of worker translation units to generate" "20")
+option(UNITY_BUILD "Enable unity build: generate a single translation unit instead of many" OFF)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
@@ -36,11 +37,23 @@ file(MAKE_DIRECTORY ${GEN_DIR})
 
 math(EXPR NUM_WORKERS_INT "${NUM_WORKERS}")
 set(GEN_SRCS "")
-foreach(i RANGE 1 ${NUM_WORKERS_INT})
-  set(f ${GEN_DIR}/worker${i}.cpp)
-  file(WRITE ${f} "#include \"heavy.hpp\"\nint worker_use_${i} = heavy_value();\n")
-  list(APPEND GEN_SRCS ${f})
-endforeach()
+
+if(UNITY_BUILD)
+  # Create a single unity translation unit that includes the heavy header once
+  set(UNITY_CONTENT "")
+  foreach(i RANGE 1 ${NUM_WORKERS_INT})
+    set(UNITY_CONTENT "${UNITY_CONTENT}int worker_use_${i} = heavy_value();\n")
+  endforeach()
+  set(UNITY_FILE ${GEN_DIR}/unity.cpp)
+  file(WRITE ${UNITY_FILE} "#include \"heavy.hpp\"\n${UNITY_CONTENT}")
+  list(APPEND GEN_SRCS ${UNITY_FILE})
+else()
+  foreach(i RANGE 1 ${NUM_WORKERS_INT})
+    set(f ${GEN_DIR}/worker${i}.cpp)
+    file(WRITE ${f} "#include \"heavy.hpp\"\nint worker_use_${i} = heavy_value();\n")
+    list(APPEND GEN_SRCS ${f})
+  endforeach()
+endif()
 
 target_sources(main PRIVATE ${GEN_SRCS})
 
